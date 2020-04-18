@@ -10,6 +10,15 @@ app = Flask(__name__)
 
 CORS(app)
 
+#Mongo Setup
+uri = 'mongodb+srv://moiz:admin123@cluster0-hyg21.mongodb.net/test?ssl=true&ssl_cert_reqs=CERT_NONE'
+client = MongoClient(uri,
+                     connectTimeoutMS=30000,
+                     socketTimeoutMS=None,
+                     socketKeepAlive=True)
+
+db = client.Farmly
+
 #Homepage
 @app.route('/',methods=['GET'])
 def index():
