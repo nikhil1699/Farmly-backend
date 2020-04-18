@@ -50,9 +50,11 @@ def add_truck():
 	#Adds a truck that will deal with deliveries
 	try:
 		truck = request.get_json()
-		truck_inserted = db.trucks.insert(truck)
-		if truck_inserted:
-			return Response(json.dumps({"message":"Truck Added"}),status=200,mimetype='application/json')
+		print(truck) #remove after
+		if truck:
+			truck_inserted = db.trucks.insert_one(truck)
+			if truck_inserted:
+				return Response(json.dumps({"message":"Truck Added"}),status=200,mimetype='application/json')
 		return Response(json.dumps({"message":"Couldn't add truck, try again"}),status=400,mimetype='application/json')
 	except Exception as e:
 		return Response(json.dumps({"message":"Couldn't add order","error":e}),status=404,mimetype='application/json')
