@@ -5,6 +5,7 @@ from bson.objectid import ObjectId
 from helpers import schedule_delivery
 import requests
 import json
+import datetime
 
 app = Flask(__name__)
 
@@ -30,12 +31,13 @@ def add_order():
 	#Adds order to DB after payment is processed
 	try:
 		order = request.get_json()
+		order['idealDeliveryDate'] = datetime.datetime.strptime(order['idealDeliveryDate'], "%Y-%m-%d")
 		order['deliveryStatus'] = 'scheduled'
 		order_inserted = db.orders.insert(order)
 		#add order to delivery
 		delivery_scheduled = schedule_delivery(order)
 		if delivery_scheduled:
-			return Response(json.dumps({"message":"Delivery Scheduled","orderId":order_inserted['_id'],"deliveryDate":delivery_scheduled}),status=200,mimetype='application/json')
+			return Response(json.dumps({"message":"Delivery Scheduled","orderId":str(order['_id']),"deliveryDate":str(delivery_scheduled)}),status=200,mimetype='application/json')
 	except Exception as e:
 		return Response(json.dumps({"message":"Couldn't add order","error":e}),status=404,mimetype='application/json')
 
