@@ -1,6 +1,7 @@
 from haversine import haversine, Unit
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+from optimization import main
 import datetime
 
 uri = 'mongodb+srv://moiz:admin123@cluster0-hyg21.mongodb.net/test?ssl=true&ssl_cert_reqs=CERT_NONE'
@@ -117,18 +118,24 @@ def schedule_delivery(order):
 		}
 		delivery_inserted = db.deliveries.insert(delivery_object)
 		delivery = db.deliveries.find_one({'_id':delivery_inserted})
+		route = main(optimal_truck['truckLocation'],delivery['inventory'])
+		added_route = db.deliveries.update_one({'_id':delivery['_id']},{"$set":{'route':route}})
 		truck_updated =  db.trucks.update_one({'_id':optimal_truck['_id']},{"$push":{'deliveries':delivery}})
 		return truck_updated
 		#add this delivery object to truck
 	else:
 		delivery = db.deliveries.find_one({'_id':new_delivery})
 		added_inventory = db.deliveries.update_one({'_id':new_delivery},{"$push":{'inventory':order}})
+		#inventory has now been added, we can now update the deliveries route
+		#we do this by passing truck location, and the inventory
+		route = main(optimal_truck['truckLocation'],delivery['inventory'])
+		added_route = db.deliveries.update_one({'_id':new_delivery},{"$set":{'route':route}})
 		updated_truck = db.trucks.update_one({'_id':optimal_truck['_id'],"deliveries._id":new_delivery},{"$set":{"deliveries.$":delivery}})
 		if updated_truck.modified_count == 1:
 			return delivery['deliveryDate']
-		print('hmph')
 
 	return datetime.datetime.now()
 
-# print(app.db.trucks.find_one({}))
+# print(db.trucks.find_one({})[''])
 # print(db.trucks.update_one({"_id": ObjectId('5e9b6c4418eff95e887b0b7e'), "deliveries._id": ObjectId('5e9b6ce0e1b3d66267772ae6')},{"$set":{"deliveries.$":db.deliveries.find_one({'_id':ObjectId('5e9b6ce0e1b3d66267772ae6')})}}))
+# print([db.deliveries.find_one({})['inventory'][0]])

@@ -1,19 +1,43 @@
 """Simple Pickup Delivery Problem (PDP)."""
-
 from __future__ import print_function
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
+from haversine import haversine, Unit
+import numpy
 
+def get_distance(lat1,lng1,lat2,lng2):
+	#find distance between two locations
+	return haversine((lat1,lng1),(lat2,lng2))
 
-def create_data_model():
+def create_data_model(truck_location,inventory):
     """Stores the data for the problem."""
-    data = {}
-    data['distance_matrix'] = [[0,11,9,28,11],[11,0,18,18,0],[9,18,0,36,18],[28,18,36,0,18],[11,0,18,18,0]]
+    locations = [truck_location]
+    pickups_deliveries = []
+    for product in inventory:
+        locations.append(product['product']['supplierLocation'])
+        locations.append(product['product']['deliveryLocation'])
+    unmatched = list(range(1,len(locations)))
+    for i in range(0, len(unmatched), 2):
+        pickups_deliveries.append(unmatched[i:i+2])
+    n = len(locations)
+    initial_matrix = numpy.zeros((n,n),dtype=numpy.int)
+    for i in range(len(initial_matrix)):
+        for j in range(len(initial_matrix[i])):
+            #calculate distance between location[i] and location[j]
+            lat_1 = locations[i]['geolocation']['lat']
+            lng_1 = locations[i]['geolocation']['lng']
+            lat_2 = locations[j]['geolocation']['lat']
+            lng_2 = locations[j]['geolocation']['lng']
+            initial_matrix[i][j] = int(get_distance(lat_1,lng_1,lat_2,lng_2))
+            # print(locations[i],locations[j])
+            # initial_matrix[i][j] = 3
+    distance_matrix = initial_matrix.tolist()
 
-    data['pickups_deliveries'] = [
-		[1,2],
-		[4,3]
-    ]
+
+    data = {}
+    data['distance_matrix'] = distance_matrix
+    data['locations'] = locations
+    data['pickups_deliveries'] = pickups_deliveries
     data['num_vehicles'] = 1
     data['depot'] = 0
     return data
@@ -24,25 +48,25 @@ def print_solution(data, manager, routing, solution):
     total_distance = 0
     for vehicle_id in range(data['num_vehicles']):
         index = routing.Start(vehicle_id)
-        plan_output = 'Route for vehicle {}:\n'.format(vehicle_id)
+        plan_output = ''
         route_distance = 0
         while not routing.IsEnd(index):
-            plan_output += ' {} -> '.format(manager.IndexToNode(index))
+            plan_output += ' {} -> '.format(data['locations'][manager.IndexToNode(index)]['address'])
             previous_index = index
             index = solution.Value(routing.NextVar(index))
             route_distance += routing.GetArcCostForVehicle(
                 previous_index, index, vehicle_id)
-        plan_output += '{}\n'.format(manager.IndexToNode(index))
-        plan_output += 'Distance of the route: {}m\n'.format(route_distance)
-        print(plan_output)
+        plan_output += '{}\n'.format(data['locations'][manager.IndexToNode(index)]['address'])
+        plan_output += 'Distance of the route: {}miles'.format(route_distance)
+        return plan_output
         total_distance += route_distance
     print('Total Distance of all routes: {}m'.format(total_distance))
 
 
-def main():
+def main(truck_location,inventory):
     """Entry point of the program."""
     # Instantiate the data problem.
-    data = create_data_model()
+    data = create_data_model(truck_location,inventory)
 
     # Create the routing index manager.
     manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),
@@ -96,11 +120,11 @@ def main():
 
     # Print solution on console.
     if solution:
-        print_solution(data, manager, routing, solution)
+        return print_solution(data, manager, routing, solution)
 
 
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()
 
 #Locations
 	#0: Truck, 1: Pickup1 , 2:Delivery1,3:Delivery2,4:Pickup2
