@@ -49,6 +49,7 @@ def can_contaminate(inventory,category):
 
 def is_new(truck,date):
 	#returns if this truck needs a new delivery scheduled for the date
+	print(truck['_id'])
 	if not 'deliveries' in truck:
 		return True 
 	else:
@@ -56,6 +57,17 @@ def is_new(truck,date):
 			if delivery['deliveryDate'] == date:
 				return delivery['_id']
 	return True
+
+def prevent_contamination(potential_couriers,idealDelivery,food_category):
+	#returns a list of couriers, that are safe to deliver without risk of cross-contamination
+	result = potential_couriers[:]
+	for courier in potential_couriers:
+		if 'deliveries' in courier['truck']:
+			for delivery in courier['truck']['deliveries']:
+				inventory = delivery['inventory']
+				if can_contaminate(inventory,food_category) and (delivery['deliveryDate']==idealDelivery) and (courier in result):
+					result.remove(courier)
+	return result
 
 def schedule_delivery(order):
 	"""Push product to matched truck's deliveries array, and return a delivery date"""
@@ -88,53 +100,56 @@ def schedule_delivery(order):
 		delivery_distance = get_distance(delivery_lat,delivery_lng,truck_lat,truck_lng)
 		if supplier_distance <= collection_radius and delivery_distance <= delivery_radius:
 			potential_couriers.append({'truck':truck,'delivery_distance':delivery_distance})
+	if not potential_couriers:
+		print('bitchhhh')
+		return None
+	potential_couriers = prevent_contamination(potential_couriers,idealDelivery,food_category)
 	for courier in potential_couriers:
 		#option 1:if the order's food category is suitable for this courier, add to this truck
 		#option 2: if product is sensitive 
 		delivery_distance = courier['delivery_distance']
-		if 'deliveries' in courier['truck']:
-			inventory = courier['truck']['deliveries'][0]['inventory']
-			if can_contaminate(inventory,food_category):
-				potential_couriers.remove(courier)
-			else:
-				if delivery_distance < min_distance:
-					optimal_truck = courier['truck']
-					min_distance = delivery_distance
-		else:
-			#no products in this truck
-			if delivery_distance < min_distance:
-				optimal_truck = courier['truck']
-				min_distance = delivery_distance
+		if delivery_distance < min_distance:
+			optimal_truck = courier['truck']
+			min_distance = delivery_distance
 	#now we have the optimal truck
 	#we can now add this order to the optimal trucks inventory for the ideal delivery date
 	#find if truck has delivery scheduled idealDeliveryDate, if not then we can create a new delivery object, otherwise we add to the inventory
+	if not optimal_truck:
+		print('ah shit')
+		return False
 	new_delivery = is_new(optimal_truck,idealDelivery) #this truck has delivery object with deliveryDate set as idealDelivery
 	if new_delivery == True:
+		print('MOTHER FUCK')
 		delivery_object = {
 			'deliveryDate':idealDelivery,
-			'route':'some route',
+			'route':main(optimal_truck['truckLocation'],[order]),
 			'inventory':[order],
 			'status':'scheduled'
 		}
 		delivery_inserted = db.deliveries.insert(delivery_object)
 		delivery = db.deliveries.find_one({'_id':delivery_inserted})
-		route = main(optimal_truck['truckLocation'],delivery['inventory'])
-		added_route = db.deliveries.update_one({'_id':delivery['_id']},{"$set":{'route':route}})
 		truck_updated =  db.trucks.update_one({'_id':optimal_truck['_id']},{"$push":{'deliveries':delivery}})
-		return truck_updated
+		if truck_updated.modified_count == 1:
+			return delivery['deliveryDate']
 		#add this delivery object to truck
 	else:
+		print('WTF')
 		delivery = db.deliveries.find_one({'_id':new_delivery})
 		added_inventory = db.deliveries.update_one({'_id':new_delivery},{"$push":{'inventory':order}})
 		#inventory has now been added, we can now update the deliveries route
 		#we do this by passing truck location, and the inventory
 		route = main(optimal_truck['truckLocation'],delivery['inventory'])
+		print(route)
 		added_route = db.deliveries.update_one({'_id':new_delivery},{"$set":{'route':route}})
-		updated_truck = db.trucks.update_one({'_id':optimal_truck['_id'],"deliveries._id":new_delivery},{"$set":{"deliveries.$":delivery}})
-		if updated_truck.modified_count == 1:
-			return delivery['deliveryDate']
-
-	return datetime.datetime.now()
+		delivery_now = db.db.deliveries.find_one({'_id':new_delivery})
+		if added_route.modified_count == 1:
+			print('hello',new_delivery)
+			updated_truck = db.trucks.update_one({'_id':optimal_truck['_id'],"deliveries._id":new_delivery},{"$set":{"deliveries.$":delivery_now}})
+			if updated_truck.modified_count == 1:
+				return delivery['deliveryDate']
+		else:
+			print('BUCKETTTTS')
+	return False
 
 # print(db.trucks.find_one({})[''])
 # print(db.trucks.update_one({"_id": ObjectId('5e9b6c4418eff95e887b0b7e'), "deliveries._id": ObjectId('5e9b6ce0e1b3d66267772ae6')},{"$set":{"deliveries.$":db.deliveries.find_one({'_id':ObjectId('5e9b6ce0e1b3d66267772ae6')})}}))

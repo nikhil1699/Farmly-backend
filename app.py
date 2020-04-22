@@ -2,6 +2,7 @@ from flask import Flask,Blueprint, flash, g, redirect, render_template, request,
 from flask_cors import CORS
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+from bson import json_util
 from helpers import schedule_delivery,get_distance
 import requests
 import json
@@ -20,6 +21,13 @@ client = MongoClient(uri,
 
 db = client.Farmly
 
+#json bs
+class JSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ObjectId):
+            return str(o)
+        return json.JSONEncoder.default(self, o)
+
 #Homepage
 @app.route('/',methods=['GET'])
 def index():
@@ -32,12 +40,16 @@ def add_order():
 	try:
 		order = request.get_json()
 		order['idealDeliveryDate'] = datetime.datetime.strptime(order['idealDeliveryDate'], "%Y-%m-%d")
-		order['deliveryStatus'] = 'scheduled'
-		order_inserted = db.orders.insert(order)
 		#add order to delivery
 		delivery_scheduled = schedule_delivery(order)
 		if delivery_scheduled:
+			order['deliveryStatus'] = 'scheduled'
+			order_inserted = db.orders.insert(order)
 			return Response(json.dumps({"message":"Delivery Scheduled","orderId":str(order['_id']),"deliveryDate":str(delivery_scheduled)}),status=200,mimetype='application/json')
+		else:
+			order['deliveryStatus'] = 'pending'
+			order_inserted = db.orders.insert(order)
+			return Response(json.dumps({"message":"Couldn't schedule delivery"}),status=409,mimetype='application/json')
 	except Exception as e:
 		return Response(json.dumps({"message":"Couldn't add order","error":e}),status=404,mimetype='application/json')
 
@@ -61,3 +73,15 @@ def add_truck():
 	except Exception as e:
 		return Response(json.dumps({"message":"Couldn't add order","error":e}),status=404,mimetype='application/json')
 
+@app.route('/get-trucks/',methods=['GET'])
+def get_trucks():
+	try:
+		trucks = list(db.trucks.find({}))
+		if trucks:
+			return Response(json.dumps({"message":"{} trucks".format(len(trucks)),"data":trucks},default=json_util.default),status=200,mimetype="application/json")
+		else:
+			return Response(json.dumps({"message":"No trucks"}),status=400,mimetype='application/json')
+	except Exception as e:
+		return Response(json.dumps({"message":"Couldn't retrieve trucks","error":e},default=json_util.default()),status=404,mimetype='application/json')
+
+		
