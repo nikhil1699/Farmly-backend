@@ -1,1 +1,1 @@
-API's for dealing with trucks, deliveries and orders.
+API's for dealing with Farmly trucks, deliveries and orders.
