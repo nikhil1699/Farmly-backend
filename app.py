@@ -13,7 +13,7 @@ app = Flask(__name__)
 CORS(app)
 
 #Mongo Setup
-uri = 'mongodb+srv://moiz:admin123@cluster0-hyg21.mongodb.net/test?ssl=true&ssl_cert_reqs=CERT_NONE'
+uri = 'mongodb+srv://'
 client = MongoClient(uri,
                      connectTimeoutMS=30000,
                      socketTimeoutMS=None,
